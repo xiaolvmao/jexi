@@ -1,0 +1,12 @@
+{
+  "autoName": false,
+  "buildSystem": "external",
+  "displayName": "jexi",
+  "projectID": "7f213e02-c280-42b9-ba61-2a11a3e0a782",
+  "schemaVersion": 1,
+  "external": {
+    "script": "apelin/build.sh",
+    "interpreter": "sh",
+    "arguments": []
+  }
+}
