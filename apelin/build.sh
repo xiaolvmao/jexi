@@ -12,7 +12,7 @@ cd "${APELIN_PROJECT_ROOT:?}"
 APP_NAME="ExifOne"
 BUNDLE_ID="com.melon.exifone"
 PKG_ID="com.melon.exifone"
-VERSION="1.0.0"
+VERSION="1.0.1"
 
 if [ "${APELIN_BOOTSTRAP}" = "roothide" ]; then
     DEFS="-DAPELIN_BOOTSTRAP_ROOTHIDE=1"
@@ -63,12 +63,13 @@ cat > "${pkg:?}/DEBIAN/control" <<EOF
 Package: ${PKG_ID}
 Version: ${VERSION}
 Architecture: ${APELIN_ARCHITECTURE}
-Name: EXIF 一键修改
-Author: Melon
-Maintainer: Melon <melon@localhost>
+Name: jexi
+Author: xiaolvmao
+Maintainer: xiaolvmao <849477678@qq.com>
 Section: Applications
-Description: 一键把照片的 EXIF 信息替换成这台设备的真实数据：机型、系统版本、
- 当前时间与时区、真实定位。像素数据原样保留，新照片保存到相册。
+Description: 把照片的 EXIF 换成设备真实数据（机型、系统版本、时间与时区、
+ 真实或附近随机定位、随机的镜头与曝光参数），支持批量、超清增强、
+ HEIF/JPEG 输出、自定义文件名与 GPS 清除。另存为新照片，原图不动。
 EOF
 
 dpkg-deb -b --root-owner-group "${pkg:?}" "${APELIN_PACKAGE_DIR:?}/"
