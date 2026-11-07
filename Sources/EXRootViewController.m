@@ -481,7 +481,7 @@ static NSString *EXShortHashOfFile(NSURL *url) {
 }
 
 - (UIView *)nameSection {
-    self.nameSwitch = [self makeSwitchOn:NO];
+    self.nameSwitch = [self makeSwitchOn:YES];
     [self.nameSwitch addTarget:self action:@selector(nameSwitchChanged)
               forControlEvents:UIControlEventValueChanged];
     UIView *row = [self switchRow:@"自定义文件名" detail:@"关闭则用系统默认命名" control:self.nameSwitch];
@@ -496,14 +496,9 @@ static NSString *EXShortHashOfFile(NSURL *url) {
     [field.heightAnchor constraintEqualToConstant:36].active = YES;
     self.nameField = field;
 
-    UIButton *done = [UIButton buttonWithType:UIButtonTypeSystem];
-    [done setTitle:@"收起键盘" forState:UIControlStateNormal];
-    [done addTarget:self action:@selector(dismissKeyboard) forControlEvents:UIControlEventTouchUpInside];
-
-    UIStackView *fieldRow = [[UIStackView alloc] initWithArrangedSubviews:@[field, done]];
+    UIStackView *fieldRow = [[UIStackView alloc] initWithArrangedSubviews:@[field]];
     fieldRow.axis = UILayoutConstraintAxisVertical;
-    fieldRow.spacing = 6;
-    fieldRow.hidden = YES;
+    fieldRow.hidden = NO;
     self.nameFieldRow = fieldRow;
 
     UIStackView *container = [[UIStackView alloc] initWithArrangedSubviews:@[row, fieldRow]];
@@ -514,15 +509,9 @@ static NSString *EXShortHashOfFile(NSURL *url) {
 
 - (void)nameSwitchChanged {
     self.nameFieldRow.hidden = !self.nameSwitch.isOn;
-    if (self.nameSwitch.isOn) {
-        [self.nameField becomeFirstResponder];
-    } else {
+    if (!self.nameSwitch.isOn) {
         [self.view endEditing:YES];
     }
-}
-
-- (void)dismissKeyboard {
-    [self.view endEditing:YES];
 }
 
 - (UIView *)formatRow {
