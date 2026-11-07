@@ -223,7 +223,10 @@ static NSString *EXShortHashOfFile(NSURL *url) {
     self.locationSwitch = [self makeSwitchOn:YES];
 
     UIStackView *options = [self cardStack];
-    [options addArrangedSubview:[self switchRow:@"设备信息" detail:@"机型、系统版本、镜头与曝光参数" control:self.deviceSwitch]];
+    [options addArrangedSubview:[self switchRow:@"设备信息" detail:@"机型、系统版本；镜头与曝光参数在区间内随机" control:self.deviceSwitch]];
+
+    [options addArrangedSubview:[self separator]];
+    [options addArrangedSubview:[self nameSection]];
 
     [options addArrangedSubview:[self separator]];
     [options addArrangedSubview:[self switchRow:@"更新时间" detail:@"模式见下；关闭则不写入时间" control:self.timeSwitch]];
@@ -239,8 +242,6 @@ static NSString *EXShortHashOfFile(NSURL *url) {
     [options addArrangedSubview:[self formatRow]];
     [options addArrangedSubview:[self separator]];
     [options addArrangedSubview:[self enhanceSection]];
-    [options addArrangedSubview:[self separator]];
-    [options addArrangedSubview:[self nameSection]];
     [self.contentStack addArrangedSubview:options];
 
     [self.timeSwitch addTarget:self action:@selector(timeSwitchChanged) forControlEvents:UIControlEventValueChanged];

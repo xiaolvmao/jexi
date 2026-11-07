@@ -26,6 +26,9 @@ apelin_package_install          # 用 build 给的 artifact id / digest 安装
 - `Sources/EXRootViewController.*`：全部界面（程序化 UIKit），选图用 `PHPickerViewController`（可多选），
   写回相册只有一种方式：另存新照片（见下）。
 - `Sources/EXMetadata.*`：ImageIO 读写 EXIF/TIFF/GPS。`EXWriteOptions` 决定写设备信息、时间、定位。
+  设备信息分支里，镜头与曝光参数在区间内随机：焦距 2.0–9.0 mm、光圈 f/1.5–2.8、等效焦距 13–77 mm、
+  ISO 25–640（固定档位）、快门 1/30–1/1000（档位）、亮度 -1–8；`LensModel` 用随机出的数值拼，
+  所以每张照片的参数都不同。
 - `Sources/EXDevice.*`：`sysctl` 读 `hw.machine` / `kern.osversion`，机型表映射到市场名与主摄参数。
 
 ## 保存方式

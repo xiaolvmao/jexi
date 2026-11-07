@@ -128,6 +128,25 @@ int main(int argc, char *argv[]) {
         NSString *caption = props[(NSString *)kCGImagePropertyIPTCDictionary][(NSString *)kCGImagePropertyIPTCCaptionAbstract];
         Expect(@"IPTC 说明被清空", caption == nil || caption.length == 0, caption ?: @"(nil)");
 
+        // 参数随机：再写一张，比对焦距/ISO/快门
+        NSURL *second = [NSURL fileURLWithPath:[[[NSFileManager defaultManager] currentDirectoryPath]
+                                                stringByAppendingPathComponent:@"exifone-rand.jpg"]];
+        NSError *randError = nil;
+        BOOL okRand = [EXMetadata writeSourceURL:source toDestination:second
+                                         options:(EXWriteDevice | EXWriteTime) location:nil
+                                            date:nil format:EXOutputFormatKeep error:&randError];
+        NSDictionary *randExif = [EXMetadata propertiesAtURL:second][(NSString *)kCGImagePropertyExifDictionary];
+        double firstFocal = [exif[(NSString *)kCGImagePropertyExifFocalLength] doubleValue];
+        double secondFocal = [randExif[(NSString *)kCGImagePropertyExifFocalLength] doubleValue];
+        double firstISO = [exif[(NSString *)kCGImagePropertyExifISOSpeedRatings] firstObject] ? [[exif[(NSString *)kCGImagePropertyExifISOSpeedRatings] firstObject] doubleValue] : 0;
+        double secondISO = [randExif[(NSString *)kCGImagePropertyExifISOSpeedRatings] firstObject] ? [[randExif[(NSString *)kCGImagePropertyExifISOSpeedRatings] firstObject] doubleValue] : 0;
+        Expect(@"镜头/曝光参数每次不同", okRand && (firstFocal != secondFocal || firstISO != secondISO),
+               [NSString stringWithFormat:@"焦距 %.3f/%.3f ISO %.0f/%.0f", firstFocal, secondFocal, firstISO, secondISO]);
+        Expect(@"焦距在 2–9mm 内", firstFocal >= 2.0 && firstFocal <= 9.0 && secondFocal >= 2.0 && secondFocal <= 9.0,
+               [NSString stringWithFormat:@"%.3f / %.3f", firstFocal, secondFocal]);
+        Expect(@"ISO 在 25–640 内", firstISO >= 25 && firstISO <= 640 && secondISO >= 25 && secondISO <= 640,
+               [NSString stringWithFormat:@"%.0f / %.0f", firstISO, secondISO]);
+
         // 转成 HEIF
         NSURL *heic = [NSURL fileURLWithPath:[[[NSFileManager defaultManager] currentDirectoryPath]
                                               stringByAppendingPathComponent:@"exifone.heic"]];

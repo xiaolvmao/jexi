@@ -2,6 +2,20 @@
 #import "EXDevice.h"
 #import <ImageIO/ImageIO.h>
 
+static double EXRandomDouble(double minimum, double maximum) {
+    if (maximum <= minimum) {
+        return minimum;
+    }
+    return minimum + ((double)arc4random() / (double)UINT32_MAX) * (maximum - minimum);
+}
+
+static NSInteger EXRandomInteger(NSInteger minimum, NSInteger maximum) {
+    if (maximum <= minimum) {
+        return minimum;
+    }
+    return minimum + (NSInteger)arc4random_uniform((uint32_t)(maximum - minimum + 1));
+}
+
 static NSString *EXDateFormat(NSDate *date, NSTimeZone *timeZone) {
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
     formatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
@@ -258,9 +272,16 @@ static BOOL EXReplaceFile(NSURL *target, NSURL *replacement) {
     if (options & EXWriteDevice) {
         NSString *make = @"Apple";
         NSString *model = [EXDevice marketingName];
-        NSDictionary *camera = [EXDevice cameraInfo];
-        double fnumber = [camera[@"fnumber"] doubleValue];
-        double focal = [camera[@"focal"] doubleValue];
+
+        // 镜头与曝光参数在合理区间内随机，每张照片不同
+        double focal = round(EXRandomDouble(2.0, 9.0) * 1000.0) / 1000.0;
+        double fnumber = round(EXRandomDouble(1.5, 2.8) * 100.0) / 100.0;
+        NSInteger isoChoices[] = {25, 32, 40, 50, 64, 80, 100, 125, 160, 200, 250, 320, 400, 500, 640};
+        NSInteger shutterChoices[] = {30, 60, 120, 250, 500, 1000};
+        NSInteger iso = isoChoices[EXRandomInteger(0, (NSInteger)(sizeof(isoChoices) / sizeof(isoChoices[0])) - 1)];
+        NSInteger shutter = shutterChoices[EXRandomInteger(0, (NSInteger)(sizeof(shutterChoices) / sizeof(shutterChoices[0])) - 1)];
+        NSInteger focal35 = EXRandomInteger(13, 77);
+        double exposureSeconds = 1.0 / (double)shutter;
 
         tiff[(NSString *)kCGImagePropertyTIFFMake] = make;
         tiff[(NSString *)kCGImagePropertyTIFFModel] = model;
@@ -271,19 +292,21 @@ static BOOL EXReplaceFile(NSURL *target, NSURL *replacement) {
         tiff[(NSString *)kCGImagePropertyTIFFResolutionUnit] = @2;
 
         exif[(NSString *)kCGImagePropertyExifLensMake] = make;
-        exif[(NSString *)kCGImagePropertyExifLensModel] = camera[@"lens"];
+        exif[(NSString *)kCGImagePropertyExifLensModel] = [NSString stringWithFormat:@"%@ back camera %.3fmm f/%.2f",
+                                                           model, focal, fnumber];
         exif[(NSString *)kCGImagePropertyExifLensSpecification] = @[@(focal), @(focal), @(fnumber), @(fnumber)];
-        exif[(NSString *)kCGImagePropertyExifFocalLength] = camera[@"focal"];
-        exif[(NSString *)kCGImagePropertyExifFocalLenIn35mmFilm] = camera[@"focal35"];
-        exif[(NSString *)kCGImagePropertyExifFNumber] = camera[@"fnumber"];
+        exif[(NSString *)kCGImagePropertyExifFocalLength] = @(focal);
+        exif[(NSString *)kCGImagePropertyExifFocalLenIn35mmFilm] = @(focal35);
+        exif[(NSString *)kCGImagePropertyExifFNumber] = @(fnumber);
         exif[(NSString *)kCGImagePropertyExifApertureValue] = @(2.0 * log2(fnumber));
         exif[(NSString *)kCGImagePropertyExifMaxApertureValue] = @(2.0 * log2(fnumber));
-        exif[(NSString *)kCGImagePropertyExifExposureTime] = @(1.0 / 120.0);
-        exif[(NSString *)kCGImagePropertyExifShutterSpeedValue] = @(log2(120.0));
+        exif[(NSString *)kCGImagePropertyExifExposureTime] = @(exposureSeconds);
+        exif[(NSString *)kCGImagePropertyExifShutterSpeedValue] = @(log2((double)shutter));
+        exif[(NSString *)kCGImagePropertyExifBrightnessValue] = @(EXRandomDouble(-1.0, 8.0));
         exif[(NSString *)kCGImagePropertyExifExposureBiasValue] = @0;
         exif[(NSString *)kCGImagePropertyExifExposureProgram] = @2;
         exif[(NSString *)kCGImagePropertyExifExposureMode] = @0;
-        exif[(NSString *)kCGImagePropertyExifISOSpeedRatings] = @[@64];
+        exif[(NSString *)kCGImagePropertyExifISOSpeedRatings] = @[@(iso)];
         exif[(NSString *)kCGImagePropertyExifMeteringMode] = @5;
         exif[(NSString *)kCGImagePropertyExifFlash] = @16;
         exif[(NSString *)kCGImagePropertyExifWhiteBalance] = @0;
