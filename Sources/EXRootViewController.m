@@ -32,7 +32,8 @@ static NSString *EXShortHashOfFile(NSURL *url) {
     return hex;
 }
 
-@interface EXRootViewController () <PHPickerViewControllerDelegate, CLLocationManagerDelegate>
+@interface EXRootViewController () <PHPickerViewControllerDelegate, CLLocationManagerDelegate,
+                                   UITextFieldDelegate>
 @property (nonatomic, strong) UIScrollView *scrollView;
 @property (nonatomic, strong) UIStackView *contentStack;
 
@@ -75,6 +76,7 @@ static NSString *EXShortHashOfFile(NSURL *url) {
 @property (nonatomic, strong) CLLocation *pickedLocation;
 @property (nonatomic, copy) NSString *pickedLocationName;
 @property (nonatomic, strong) NSTimer *clockTimer;
+@property (nonatomic, copy) NSString *deviceCardSignature;
 @property (nonatomic, assign) BOOL keyboardVisible;
 @end
 
@@ -111,6 +113,10 @@ static NSString *EXShortHashOfFile(NSURL *url) {
     CGRect endFrame = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
     CGRect frameInView = [self.view convertRect:endFrame fromView:nil];
     CGFloat overlap = MAX(0.0, CGRectGetMaxY(self.view.bounds) - CGRectGetMinY(frameInView));
+    if (overlap <= 0.5) {
+        // 收起键盘时这个通知也会来一帧，交给 keyboardWillHide 处理，别在这里把 inset 清掉
+        return;
+    }
 
     // 键盘期间停止每秒刷新设备卡片，避免布局抖动把滚动位置顶回去
     [self.clockTimer invalidate];
@@ -128,34 +134,15 @@ static NSString *EXShortHashOfFile(NSURL *url) {
 }
 
 - (void)keyboardWillHide:(NSNotification *)notification {
-    CGFloat fieldYBefore = [self.nameField convertRect:self.nameField.bounds toView:self.view].origin.y;
-
-    self.scrollView.contentInset = UIEdgeInsetsZero;
-    self.scrollView.verticalScrollIndicatorInsets = UIEdgeInsetsZero;
+    // 收起键盘后让输入框停在输入时的位置：不清掉底部内边距，而是留出刚好够当前
+    // 偏移的量，否则滚动偏移会被夹回去，画面整体上移。
+    UIScrollView *scrollView = self.scrollView;
+    CGFloat offset = scrollView.contentOffset.y;
+    CGFloat needed = MAX(0.0, offset + scrollView.bounds.size.height - scrollView.contentSize.height);
+    scrollView.contentInset = UIEdgeInsetsMake(0, 0, needed, 0);
+    scrollView.verticalScrollIndicatorInsets = UIEdgeInsetsMake(0, 0, needed, 0);
     self.keyboardVisible = NO;
-
-    // UIKit 改 inset 时会顺带挪 contentOffset，下一轮再量一次输入框的屏幕位置并补偿回去，
-    // 让它在键盘收起后仍停在输入时待着的地方。
-    __weak typeof(self) weakSelf = self;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        typeof(self) strongSelf = weakSelf;
-        if (strongSelf == nil) {
-            return;
-        }
-        CGFloat fieldYAfter = [strongSelf.nameField convertRect:strongSelf.nameField.bounds
-                                                         toView:strongSelf.view].origin.y;
-        CGFloat delta = fieldYAfter - fieldYBefore;
-        if (fabs(delta) > 0.5) {
-            UIScrollView *scrollView = strongSelf.scrollView;
-            CGFloat maxOffset = MAX(0.0, scrollView.contentSize.height - scrollView.bounds.size.height);
-            CGFloat target = MAX(0.0, MIN(scrollView.contentOffset.y - delta, maxOffset));
-            [scrollView setContentOffset:CGPointMake(scrollView.contentOffset.x, target) animated:NO];
-        }
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [self startClock];
-    });
+    [self startClock];
 }
 
 - (void)scrollNameFieldIntoView {
@@ -213,6 +200,11 @@ static NSString *EXShortHashOfFile(NSURL *url) {
     self.contentStack.spacing = 16;
     self.contentStack.alignment = UIStackViewAlignmentFill;
     [self.scrollView addSubview:self.contentStack];
+
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self
+                                                                         action:@selector(backgroundTapped:)];
+    tap.cancelsTouchesInView = NO;
+    [self.scrollView addGestureRecognizer:tap];
 
     [NSLayoutConstraint activateConstraints:@[
         [self.scrollView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
@@ -574,6 +566,8 @@ static NSString *EXShortHashOfFile(NSURL *url) {
     field.autocapitalizationType = UITextAutocapitalizationTypeNone;
     field.autocorrectionType = UITextAutocorrectionTypeNo;
     field.clearButtonMode = UITextFieldViewModeWhileEditing;
+    field.returnKeyType = UIReturnKeyDone;
+    field.delegate = self;
     field.font = [UIFont systemFontOfSize:15];
     [field.heightAnchor constraintEqualToConstant:36].active = YES;
     self.nameField = field;
@@ -587,6 +581,19 @@ static NSString *EXShortHashOfFile(NSURL *url) {
     container.axis = UILayoutConstraintAxisVertical;
     container.spacing = 8;
     return container;
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)textField {
+    [textField resignFirstResponder];
+    return YES;
+}
+
+- (void)backgroundTapped:(UITapGestureRecognizer *)gesture {
+    CGPoint point = [gesture locationInView:self.nameField];
+    if ([self.nameField pointInside:point withEvent:nil]) {
+        return;
+    }
+    [self.view endEditing:YES];
 }
 
 - (void)nameSwitchChanged {
@@ -796,6 +803,14 @@ static NSString *EXShortHashOfFile(NSURL *url) {
         [rows addObject:@{@"key": @"批量", @"value": [NSString stringWithFormat:@"共 %lu 张，每张时间不同",
                                                      (unsigned long)self.sourceURLs.count]}];
     }
+    NSMutableString *signature = [NSMutableString string];
+    for (NSDictionary<NSString *, NSString *> *row in rows) {
+        [signature appendFormat:@"%@=%@;", row[@"key"], row[@"value"]];
+    }
+    if (self.deviceCardSignature != nil && [self.deviceCardSignature isEqualToString:signature]) {
+        return;
+    }
+    self.deviceCardSignature = signature;
     [self fillStack:self.deviceStack withRows:rows emptyText:@""];
 }
 
