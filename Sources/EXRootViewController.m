@@ -91,6 +91,43 @@ static NSString *EXShortHashOfFile(NSURL *url) {
     self.locationManager.delegate = self;
     self.locationManager.desiredAccuracy = kCLLocationAccuracyBest;
     [self refreshDeviceCard];
+
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(keyboardWillChange:)
+                                                 name:UIKeyboardWillChangeFrameNotification
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(keyboardWillHide:)
+                                                 name:UIKeyboardWillHideNotification
+                                               object:nil];
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)keyboardWillChange:(NSNotification *)notification {
+    CGRect endFrame = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+    CGRect frameInView = [self.view convertRect:endFrame fromView:nil];
+    CGFloat overlap = MAX(0.0, CGRectGetMaxY(self.view.bounds) - CGRectGetMinY(frameInView));
+    self.scrollView.contentInset = UIEdgeInsetsMake(0, 0, overlap + 16, 0);
+    self.scrollView.verticalScrollIndicatorInsets = UIEdgeInsetsMake(0, 0, overlap, 0);
+    [self scrollNameFieldIntoView];
+}
+
+- (void)keyboardWillHide:(NSNotification *)notification {
+    self.scrollView.contentInset = UIEdgeInsetsZero;
+    self.scrollView.verticalScrollIndicatorInsets = UIEdgeInsetsZero;
+}
+
+- (void)scrollNameFieldIntoView {
+    if (![self.nameField isFirstResponder]) {
+        return;
+    }
+    CGRect fieldRect = [self.nameField convertRect:self.nameField.bounds toView:self.scrollView];
+    // 上下各留一点余量，让输入框落在键盘上方而不是贴着边
+    CGRect target = CGRectInset(fieldRect, 0, -70);
+    [self.scrollView scrollRectToVisible:target animated:YES];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
