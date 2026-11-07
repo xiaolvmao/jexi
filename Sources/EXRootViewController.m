@@ -110,24 +110,41 @@ static NSString *EXShortHashOfFile(NSURL *url) {
     CGRect endFrame = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
     CGRect frameInView = [self.view convertRect:endFrame fromView:nil];
     CGFloat overlap = MAX(0.0, CGRectGetMaxY(self.view.bounds) - CGRectGetMinY(frameInView));
-    self.scrollView.contentInset = UIEdgeInsetsMake(0, 0, overlap + 16, 0);
+
+    // 键盘期间停止每秒刷新设备卡片，避免布局抖动把滚动位置顶回去
+    [self.clockTimer invalidate];
+    self.clockTimer = nil;
+
+    self.scrollView.contentInset = UIEdgeInsetsMake(0, 0, overlap, 0);
     self.scrollView.verticalScrollIndicatorInsets = UIEdgeInsetsMake(0, 0, overlap, 0);
     [self scrollNameFieldIntoView];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [self scrollNameFieldIntoView];
+    });
 }
 
 - (void)keyboardWillHide:(NSNotification *)notification {
     self.scrollView.contentInset = UIEdgeInsetsZero;
     self.scrollView.verticalScrollIndicatorInsets = UIEdgeInsetsZero;
+    [self startClock];
 }
 
 - (void)scrollNameFieldIntoView {
     if (![self.nameField isFirstResponder]) {
         return;
     }
-    CGRect fieldRect = [self.nameField convertRect:self.nameField.bounds toView:self.scrollView];
-    // 上下各留一点余量，让输入框落在键盘上方而不是贴着边
-    CGRect target = CGRectInset(fieldRect, 0, -70);
-    [self.scrollView scrollRectToVisible:target animated:YES];
+    UIScrollView *scrollView = self.scrollView;
+    CGRect fieldRect = [self.nameField convertRect:self.nameField.bounds toView:scrollView];
+    CGFloat insetTop = scrollView.adjustedContentInset.top;
+    CGFloat insetBottom = scrollView.adjustedContentInset.bottom;
+    CGFloat visibleBottom = scrollView.bounds.size.height - insetBottom;
+
+    // 让输入框底部停在可视区域底部上方 24pt
+    CGFloat targetOffset = CGRectGetMaxY(fieldRect) + 24.0 - visibleBottom;
+    CGFloat maxOffset = MAX(-insetTop, scrollView.contentSize.height + insetBottom - scrollView.bounds.size.height);
+    targetOffset = MAX(-insetTop, MIN(targetOffset, maxOffset));
+    [scrollView setContentOffset:CGPointMake(0, targetOffset) animated:YES];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
