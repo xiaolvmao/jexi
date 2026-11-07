@@ -128,17 +128,34 @@ static NSString *EXShortHashOfFile(NSURL *url) {
 }
 
 - (void)keyboardWillHide:(NSNotification *)notification {
+    CGFloat fieldYBefore = [self.nameField convertRect:self.nameField.bounds toView:self.view].origin.y;
+
     self.scrollView.contentInset = UIEdgeInsetsZero;
     self.scrollView.verticalScrollIndicatorInsets = UIEdgeInsetsZero;
     self.keyboardVisible = NO;
 
-    // 收起键盘后就停在当前位置，只把越界的偏移收回到合法范围
-    UIScrollView *scrollView = self.scrollView;
-    CGFloat maxOffset = MAX(0.0, scrollView.contentSize.height - scrollView.bounds.size.height);
-    if (scrollView.contentOffset.y > maxOffset) {
-        [scrollView setContentOffset:CGPointMake(scrollView.contentOffset.x, maxOffset) animated:NO];
-    }
-    [self startClock];
+    // UIKit 改 inset 时会顺带挪 contentOffset，下一轮再量一次输入框的屏幕位置并补偿回去，
+    // 让它在键盘收起后仍停在输入时待着的地方。
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        typeof(self) strongSelf = weakSelf;
+        if (strongSelf == nil) {
+            return;
+        }
+        CGFloat fieldYAfter = [strongSelf.nameField convertRect:strongSelf.nameField.bounds
+                                                         toView:strongSelf.view].origin.y;
+        CGFloat delta = fieldYAfter - fieldYBefore;
+        if (fabs(delta) > 0.5) {
+            UIScrollView *scrollView = strongSelf.scrollView;
+            CGFloat maxOffset = MAX(0.0, scrollView.contentSize.height - scrollView.bounds.size.height);
+            CGFloat target = MAX(0.0, MIN(scrollView.contentOffset.y - delta, maxOffset));
+            [scrollView setContentOffset:CGPointMake(scrollView.contentOffset.x, target) animated:NO];
+        }
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [self startClock];
+    });
 }
 
 - (void)scrollNameFieldIntoView {
