@@ -6,6 +6,7 @@
 #import <Photos/Photos.h>
 #import <CoreLocation/CoreLocation.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#import <CommonCrypto/CommonDigest.h>
 #import <os/log.h>
 
 static os_log_t EXEditLog(void) {
@@ -15,6 +16,20 @@ static os_log_t EXEditLog(void) {
         log = os_log_create("com.melon.exifone", "edit");
     });
     return log;
+}
+
+static NSString *EXShortHashOfFile(NSURL *url) {
+    NSData *data = [NSData dataWithContentsOfURL:url options:NSDataReadingMappedIfSafe error:NULL];
+    if (data.length == 0) {
+        return [[[NSUUID UUID].UUIDString stringByReplacingOccurrencesOfString:@"-" withString:@""] substringToIndex:8];
+    }
+    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256(data.bytes, (CC_LONG)data.length, digest);
+    NSMutableString *hex = [NSMutableString stringWithCapacity:8];
+    for (int i = 0; i < 4; i++) {
+        [hex appendFormat:@"%02X", digest[i]];
+    }
+    return hex;
 }
 
 @interface EXRootViewController () <PHPickerViewControllerDelegate, CLLocationManagerDelegate>
@@ -44,6 +59,9 @@ static os_log_t EXEditLog(void) {
 @property (nonatomic, strong) UISwitch *enhanceSwitch;
 @property (nonatomic, strong) UISegmentedControl *enhanceScaleControl;
 @property (nonatomic, strong) UIView *enhanceScaleRow;
+@property (nonatomic, strong) UISwitch *nameSwitch;
+@property (nonatomic, strong) UITextField *nameField;
+@property (nonatomic, strong) UIView *nameFieldRow;
 @property (nonatomic, strong) UIDatePicker *datePicker;
 @property (nonatomic, strong) UIView *timeFixedRow;
 @property (nonatomic, strong) UIView *locationRangeRow;
@@ -221,6 +239,8 @@ static os_log_t EXEditLog(void) {
     [options addArrangedSubview:[self formatRow]];
     [options addArrangedSubview:[self separator]];
     [options addArrangedSubview:[self enhanceSection]];
+    [options addArrangedSubview:[self separator]];
+    [options addArrangedSubview:[self nameSection]];
     [self.contentStack addArrangedSubview:options];
 
     [self.timeSwitch addTarget:self action:@selector(timeSwitchChanged) forControlEvents:UIControlEventValueChanged];
@@ -457,6 +477,51 @@ static os_log_t EXEditLog(void) {
 
 - (void)enhanceChanged {
     self.enhanceScaleRow.hidden = !self.enhanceSwitch.isOn;
+}
+
+- (UIView *)nameSection {
+    self.nameSwitch = [self makeSwitchOn:NO];
+    [self.nameSwitch addTarget:self action:@selector(nameSwitchChanged)
+              forControlEvents:UIControlEventValueChanged];
+    UIView *row = [self switchRow:@"自定义文件名" detail:@"关闭则用系统默认命名" control:self.nameSwitch];
+
+    UITextField *field = [[UITextField alloc] init];
+    field.placeholder = @"留空则 IMG_ + 图片 hash";
+    field.borderStyle = UITextBorderStyleRoundedRect;
+    field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    field.autocorrectionType = UITextAutocorrectionTypeNo;
+    field.clearButtonMode = UITextFieldViewModeWhileEditing;
+    field.font = [UIFont systemFontOfSize:15];
+    [field.heightAnchor constraintEqualToConstant:36].active = YES;
+    self.nameField = field;
+
+    UIButton *done = [UIButton buttonWithType:UIButtonTypeSystem];
+    [done setTitle:@"收起键盘" forState:UIControlStateNormal];
+    [done addTarget:self action:@selector(dismissKeyboard) forControlEvents:UIControlEventTouchUpInside];
+
+    UIStackView *fieldRow = [[UIStackView alloc] initWithArrangedSubviews:@[field, done]];
+    fieldRow.axis = UILayoutConstraintAxisVertical;
+    fieldRow.spacing = 6;
+    fieldRow.hidden = YES;
+    self.nameFieldRow = fieldRow;
+
+    UIStackView *container = [[UIStackView alloc] initWithArrangedSubviews:@[row, fieldRow]];
+    container.axis = UILayoutConstraintAxisVertical;
+    container.spacing = 8;
+    return container;
+}
+
+- (void)nameSwitchChanged {
+    self.nameFieldRow.hidden = !self.nameSwitch.isOn;
+    if (self.nameSwitch.isOn) {
+        [self.nameField becomeFirstResponder];
+    } else {
+        [self.view endEditing:YES];
+    }
+}
+
+- (void)dismissKeyboard {
+    [self.view endEditing:YES];
 }
 
 - (UIView *)formatRow {
@@ -1028,10 +1093,27 @@ static os_log_t EXEditLog(void) {
     }
     [self setStatus:[NSString stringWithFormat:@"正在保存 %lu/%lu…", (unsigned long)(index + 1),
                      (unsigned long)outputs.count]];
+
+    NSString *customBase = nil;
+    if (self.nameSwitch.isOn) {
+        customBase = [self.nameField.text stringByTrimmingCharactersInSet:
+                      [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (customBase.length == 0) {
+            customBase = [@"IMG_" stringByAppendingString:EXShortHashOfFile(outputs[index])];
+        }
+    }
+
     __weak typeof(self) weakSelf = self;
     [[PHPhotoLibrary sharedPhotoLibrary] performChanges:^{
         PHAssetCreationRequest *request = [PHAssetCreationRequest creationRequestForAsset];
-        [request addResourceWithType:PHAssetResourceTypePhoto fileURL:outputs[index] options:nil];
+        PHAssetResourceCreationOptions *resourceOptions = nil;
+        if (customBase.length > 0) {
+            resourceOptions = [[PHAssetResourceCreationOptions alloc] init];
+            NSString *extension = outputs[index].pathExtension;
+            resourceOptions.originalFilename = extension.length > 0
+                ? [customBase stringByAppendingPathExtension:extension] : customBase;
+        }
+        [request addResourceWithType:PHAssetResourceTypePhoto fileURL:outputs[index] options:resourceOptions];
     } completionHandler:^(BOOL success, NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
             if (!success) {

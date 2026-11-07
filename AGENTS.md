@@ -39,6 +39,14 @@ apelin_package_install          # 用 build 给的 artifact id / digest 安装
 - 批量：一次选多张（`PHPickerConfiguration.selectionLimit = 0`），后台队列逐张写临时文件，
   再 `PHAssetCreationRequest` 逐张保存，状态栏显示进度；同批共用同一个定位，时间各自生成。
 
+## 文件名与说明
+
+- 保存时若「自定义文件名」开关打开：`PHAssetResourceCreationOptions.originalFilename` 设成用户填的名字；
+  留空则 `IMG_` + 文件 SHA-256 前 4 字节（8 位大写十六进制）。
+- 说明类字段一律写空字符串（`TIFFImageDescription`、`ExifUserComment`、IPTC 的
+  `CaptionAbstract` / `Headline` / `ObjectName`）：因为 `AddImageFromSource` 是合并语义，
+  只有显式写空值才盖得掉源照片里的说明。
+
 ## 超清增强
 
 `EXEnhancer` 用 Core Image：`CILanczosScaleTransform` 放大 + `CIUnsharpMask`（radius 2、intensity 0.6）锐化，

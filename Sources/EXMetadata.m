@@ -352,6 +352,18 @@ static BOOL EXReplaceFile(NSURL *target, NSURL *replacement) {
         [properties removeObjectForKey:(NSString *)kCGImagePropertyGPSDictionary];
     }
 
+    // 说明类字段一律清空：AddImageFromSource 是合并语义，只有显式写空值才盖得掉源里的说明。
+    tiff[(NSString *)kCGImagePropertyTIFFImageDescription] = @"";
+    exif[(NSString *)kCGImagePropertyExifUserComment] = @"";
+    NSMutableDictionary *iptc = [properties[(NSString *)kCGImagePropertyIPTCDictionary] mutableCopy];
+    if (iptc == nil) {
+        iptc = [NSMutableDictionary dictionary];
+    }
+    iptc[(NSString *)kCGImagePropertyIPTCCaptionAbstract] = @"";
+    iptc[(NSString *)kCGImagePropertyIPTCHeadline] = @"";
+    iptc[(NSString *)kCGImagePropertyIPTCObjectName] = @"";
+    properties[(NSString *)kCGImagePropertyIPTCDictionary] = iptc;
+
     properties[(NSString *)kCGImagePropertyTIFFDictionary] = tiff;
     properties[(NSString *)kCGImagePropertyExifDictionary] = exif;
 

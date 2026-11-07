@@ -123,6 +123,11 @@ int main(int argc, char *argv[]) {
         Expect(@"TIFF.ResolutionUnit 已写", tiff[(NSString *)kCGImagePropertyTIFFResolutionUnit] != nil,
                [tiff[(NSString *)kCGImagePropertyTIFFResolutionUnit] description]);
 
+        NSString *description = tiff[(NSString *)kCGImagePropertyTIFFImageDescription];
+        Expect(@"说明字段被清空", description == nil || description.length == 0, description ?: @"(nil)");
+        NSString *caption = props[(NSString *)kCGImagePropertyIPTCDictionary][(NSString *)kCGImagePropertyIPTCCaptionAbstract];
+        Expect(@"IPTC 说明被清空", caption == nil || caption.length == 0, caption ?: @"(nil)");
+
         // 转成 HEIF
         NSURL *heic = [NSURL fileURLWithPath:[[[NSFileManager defaultManager] currentDirectoryPath]
                                               stringByAppendingPathComponent:@"exifone.heic"]];

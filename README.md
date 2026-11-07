@@ -13,6 +13,8 @@
 - **批量**：一次选多张，同批共用同一个位置，逐张写出并保存，状态栏显示进度。
 - **输出格式**：原格式 / JPEG / HEIF（换格式会重新编码，质量 0.95）。
 - **超清增强**：Core Image 的 Lanczos 放大（2×/3×/4×）+ Unsharp Mask 锐化，长边上限 8192 像素，超过时自动降倍数。
+- **文件名**：可开关的自定义命名，留空则 `IMG_` + 图片 SHA-256 的前 8 位。
+- 写入时清空说明类字段（TIFF ImageDescription、EXIF UserComment、IPTC Caption/Headline/ObjectName）。
 - **多选预览**：左右滑动查看，长按可删除当前这张。
 - 关闭「真实定位」时，会把原照片里的 GPS 信息一并抹掉。
 
