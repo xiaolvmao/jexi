@@ -1,6 +1,7 @@
 #import "EXRootViewController.h"
 #import "EXMetadata.h"
 #import "EXDevice.h"
+#import "EXEnhancer.h"
 #import <PhotosUI/PhotosUI.h>
 #import <Photos/Photos.h>
 #import <CoreLocation/CoreLocation.h>
@@ -40,6 +41,9 @@ static os_log_t EXEditLog(void) {
 @property (nonatomic, strong) UISegmentedControl *timeModeControl;
 @property (nonatomic, strong) UISegmentedControl *distanceControl;
 @property (nonatomic, strong) UISegmentedControl *formatControl;
+@property (nonatomic, strong) UISwitch *enhanceSwitch;
+@property (nonatomic, strong) UISegmentedControl *enhanceScaleControl;
+@property (nonatomic, strong) UIView *enhanceScaleRow;
 @property (nonatomic, strong) UIDatePicker *datePicker;
 @property (nonatomic, strong) UIView *timeFixedRow;
 @property (nonatomic, strong) UIView *locationRangeRow;
@@ -215,6 +219,8 @@ static os_log_t EXEditLog(void) {
 
     [options addArrangedSubview:[self separator]];
     [options addArrangedSubview:[self formatRow]];
+    [options addArrangedSubview:[self separator]];
+    [options addArrangedSubview:[self enhanceSection]];
     [self.contentStack addArrangedSubview:options];
 
     [self.timeSwitch addTarget:self action:@selector(timeSwitchChanged) forControlEvents:UIControlEventValueChanged];
@@ -421,6 +427,36 @@ static os_log_t EXEditLog(void) {
     BOOL nearby = (source.selectedSegmentIndex == 1) && self.locationSwitch.isOn;
     self.distanceSwitchRow.hidden = !nearby;
     self.locationRangeRow.hidden = !(nearby && self.distanceCustomSwitch.isOn);
+}
+
+- (UIView *)enhanceSection {
+    self.enhanceSwitch = [self makeSwitchOn:NO];
+    [self.enhanceSwitch addTarget:self action:@selector(enhanceChanged)
+                 forControlEvents:UIControlEventValueChanged];
+    UIView *row = [self switchRow:@"超清增强" detail:@"放大并锐化，长边最大 8192 像素" control:self.enhanceSwitch];
+
+    UILabel *title = [[UILabel alloc] init];
+    title.text = @"放大倍数";
+    title.font = [UIFont systemFontOfSize:13];
+    title.textColor = [UIColor secondaryLabelColor];
+
+    self.enhanceScaleControl = [[UISegmentedControl alloc] initWithItems:@[@"2×", @"3×", @"4×"]];
+    self.enhanceScaleControl.selectedSegmentIndex = 0;
+
+    UIStackView *scaleRow = [[UIStackView alloc] initWithArrangedSubviews:@[title, self.enhanceScaleControl]];
+    scaleRow.axis = UILayoutConstraintAxisVertical;
+    scaleRow.spacing = 6;
+    scaleRow.hidden = YES;
+    self.enhanceScaleRow = scaleRow;
+
+    UIStackView *container = [[UIStackView alloc] initWithArrangedSubviews:@[row, scaleRow]];
+    container.axis = UILayoutConstraintAxisVertical;
+    container.spacing = 8;
+    return container;
+}
+
+- (void)enhanceChanged {
+    self.enhanceScaleRow.hidden = !self.enhanceSwitch.isOn;
 }
 
 - (UIView *)formatRow {
@@ -905,7 +941,11 @@ static os_log_t EXEditLog(void) {
         NSDate *date = [self dateForIndex:index total:sources.count];
         [dates addObject:date ?: [NSNull null]];
     }
-    [self setStatus:[NSString stringWithFormat:@"正在处理 %lu 张…", (unsigned long)sources.count]];
+    BOOL enhance = self.enhanceSwitch.isOn;
+    CGFloat enhanceScale = [@[@2.0, @3.0, @4.0][self.enhanceScaleControl.selectedSegmentIndex] doubleValue];
+    [self setStatus:enhance
+        ? [NSString stringWithFormat:@"正在超清处理 %lu 张…", (unsigned long)sources.count]
+        : [NSString stringWithFormat:@"正在处理 %lu 张…", (unsigned long)sources.count]];
 
     __weak typeof(self) weakSelf = self;
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
@@ -915,11 +955,34 @@ static os_log_t EXEditLog(void) {
             NSURL *source = sources[index];
             id dateEntry = dates[index];
             NSDate *date = [dateEntry isKindOfClass:[NSDate class]] ? dateEntry : nil;
-            NSString *name = [NSString stringWithFormat:@"out-%@.%@", [NSUUID UUID].UUIDString, extension];
+
+            NSURL *input = source;
+            EXOutputFormat writeFormat = format;
+            NSString *writeExtension = extension;
+            if (enhance) {
+                NSString *enhanceExtension = (format == EXOutputFormatKeep)
+                    ? (source.pathExtension.length > 0 ? source.pathExtension : @"jpg")
+                    : extension;
+                NSString *enhanceName = [NSString stringWithFormat:@"enh-%@.%@",
+                                         [NSUUID UUID].UUIDString, enhanceExtension];
+                NSURL *enhanced = [NSURL fileURLWithPath:
+                                   [NSTemporaryDirectory() stringByAppendingPathComponent:enhanceName]];
+                NSError *enhanceError = nil;
+                if (![EXEnhancer upscaleURL:source toURL:enhanced scale:enhanceScale
+                               maxDimension:8192 error:&enhanceError]) {
+                    firstError = enhanceError;
+                    break;
+                }
+                input = enhanced;
+                writeFormat = EXOutputFormatKeep;
+                writeExtension = enhanceExtension;
+            }
+
+            NSString *name = [NSString stringWithFormat:@"out-%@.%@", [NSUUID UUID].UUIDString, writeExtension];
             NSURL *output = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:name]];
             NSError *error = nil;
-            if (![EXMetadata writeSourceURL:source toDestination:output options:options
-                                   location:location date:date format:format error:&error]) {
+            if (![EXMetadata writeSourceURL:input toDestination:output options:options
+                                   location:location date:date format:writeFormat error:&error]) {
                 firstError = error;
                 break;
             }

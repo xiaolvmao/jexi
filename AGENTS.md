@@ -39,6 +39,14 @@ apelin_package_install          # 用 build 给的 artifact id / digest 安装
 - 批量：一次选多张（`PHPickerConfiguration.selectionLimit = 0`），后台队列逐张写临时文件，
   再 `PHAssetCreationRequest` 逐张保存，状态栏显示进度；同批共用同一个定位，时间各自生成。
 
+## 超清增强
+
+`EXEnhancer` 用 Core Image：`CILanczosScaleTransform` 放大 + `CIUnsharpMask`（radius 2、intensity 0.6）锐化，
+长边超过 8192 像素时自动降低倍数。流程是先增强成目标格式的临时文件，再走 `EXMetadata` 写元数据
+（这样只编码一次）。注意 `CIFilter.isEnabled` 在 iOS 上不可用，别写这个判断。
+
+自测：`Tools/enhance_test.m`（放大尺寸、长边上限）。
+
 ## 时间与位置
 
 - 时间模式只有 `现在` / `指定`（`UIDatePicker`），批量时所有照片共用同一个时间。

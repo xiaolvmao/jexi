@@ -30,10 +30,10 @@ for arch in ${ARCHS}; do
         -miphoneos-version-min=16.0 ${DEFS} -ISources \
         -DAPELIN_PACKAGE_ID="\"${PKG_ID}\"" \
         Sources/main.m Sources/EXAppDelegate.m Sources/EXRootViewController.m \
-        Sources/EXDevice.m Sources/EXMetadata.m \
+        Sources/EXDevice.m Sources/EXMetadata.m Sources/EXEnhancer.m \
         -o "${out}" \
         -framework UIKit -framework Foundation -framework PhotosUI -framework Photos \
-        -framework ImageIO -framework CoreLocation -framework CoreGraphics \
+        -framework ImageIO -framework CoreLocation -framework CoreGraphics -framework CoreImage \
         -framework UniformTypeIdentifiers
     bins="${bins} ${out}"
 done
