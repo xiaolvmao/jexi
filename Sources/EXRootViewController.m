@@ -75,7 +75,6 @@ static NSString *EXShortHashOfFile(NSURL *url) {
 @property (nonatomic, strong) CLLocation *pickedLocation;
 @property (nonatomic, copy) NSString *pickedLocationName;
 @property (nonatomic, strong) NSTimer *clockTimer;
-@property (nonatomic, assign) CGPoint offsetBeforeKeyboard;
 @property (nonatomic, assign) BOOL keyboardVisible;
 @end
 
@@ -117,10 +116,7 @@ static NSString *EXShortHashOfFile(NSURL *url) {
     [self.clockTimer invalidate];
     self.clockTimer = nil;
 
-    if (!self.keyboardVisible) {
-        self.offsetBeforeKeyboard = self.scrollView.contentOffset;
-        self.keyboardVisible = YES;
-    }
+    self.keyboardVisible = YES;
 
     self.scrollView.contentInset = UIEdgeInsetsMake(0, 0, overlap, 0);
     self.scrollView.verticalScrollIndicatorInsets = UIEdgeInsetsMake(0, 0, overlap, 0);
@@ -136,11 +132,12 @@ static NSString *EXShortHashOfFile(NSURL *url) {
     self.scrollView.verticalScrollIndicatorInsets = UIEdgeInsetsZero;
     self.keyboardVisible = NO;
 
-    // 收起键盘后回到键盘弹出前的位置
+    // 收起键盘后就停在当前位置，只把越界的偏移收回到合法范围
     UIScrollView *scrollView = self.scrollView;
     CGFloat maxOffset = MAX(0.0, scrollView.contentSize.height - scrollView.bounds.size.height);
-    CGFloat target = MIN(MAX(self.offsetBeforeKeyboard.y, 0.0), maxOffset);
-    [scrollView setContentOffset:CGPointMake(scrollView.contentOffset.x, target) animated:YES];
+    if (scrollView.contentOffset.y > maxOffset) {
+        [scrollView setContentOffset:CGPointMake(scrollView.contentOffset.x, maxOffset) animated:NO];
+    }
     [self startClock];
 }
 
